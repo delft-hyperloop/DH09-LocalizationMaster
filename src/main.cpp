@@ -37,7 +37,8 @@ long msgCounterReceived = 0;
 
 bool sendToSensorhub = false;
 
-uint32_t position = 0;
+uint32_t positionValue = 0;
+uint8_t positionArray[4];
 uint32_t prevPosition = -1000;
 uint32_t vel = 0;
 
@@ -62,25 +63,6 @@ void canSniff(const CAN_message_t &msg)
   Serial.print("}  ||");
 }
 
-void sendCAN(int ID, uint8_t len, uint8_t *data)
-{
-  CAN_message_t msg;
-  msg.id = ID; // Set the CAN ID
-  msg.len = len; // Set the length of the message
-  for (int i = 0; i < len; i++)
-  {
-    msg.buf[i] = data[i]; // Copy the received data to the CAN message buffer
-  }
-  can2.write(msg); // Send the CAN message
-}
-float decodeTemperature(uint8_t encoded) {
-  if (encoded & 0x80) {  // High precision mode
-      return precisionRangeStart + (encoded & 0x7F) / 10.0;
-  } else {  // Integer mode
-      return (float)encoded;
-  }
-}
-
 void printByteArrayBinary(uint8_t *arr, size_t length)
 {
   Serial.print("{ ");
@@ -95,6 +77,35 @@ void printByteArrayBinary(uint8_t *arr, size_t length)
   }
   Serial.println(" }");
 }
+void sendCAN(int ID, uint8_t len, uint8_t *data)
+{
+  // Serial.println("am i stuck? 6");
+  CAN_message_t msg;
+  msg.id = ID; // Set the CAN ID
+  msg.len = len; // Set the length of the message
+  // Serial.println("am i stuck? 7");
+
+  for (int i = 0; i < len; i++)
+  {
+    msg.buf[i] = data[i]; // Copy the received data to the CAN message buffer
+  }
+  // Serial.println("am i stuck? 8");  
+
+  can2.write(msg); // Send the CAN message
+  // delay(10);
+  // Serial.print("CAN message sent!");
+  // Serial.println("am i stuck? 9");
+  // printByteArrayBinary(data, len);
+
+}
+float decodeTemperature(uint8_t encoded) {
+  if (encoded & 0x80) {  // High precision mode
+      return precisionRangeStart + (encoded & 0x7F) / 10.0;
+  } else {  // Integer mode
+      return (float)encoded;
+  }
+}
+
 
 CommandType getCommandFromString(const String &command)
 {
@@ -244,11 +255,12 @@ void setup()
  
   // % CAN SETUP %%%
   can2.begin();
-  can2.setBaudRate(1000000);
+  can2.setBaudRate(1000000); // Set CAN baud rate to 1 Mbps
 }
 
 void loop()
 {
+  // Serial.println("Loop!");
   uint8_t received[9];
 
   if (!REQUEST_CYCLIC){
@@ -258,20 +270,27 @@ void loop()
       sendCommandToSensor("SINGLE_POS_VEL");
     }
   }
+  // Serial.println("am i stuck? 1");
 
   // TODO: 9 bytes is for cyclic, 7 for non cyclic. fix
   if (Serial7.available() >= 9)
   {
+    // Serial.println("am i stuck? 2");
+
     Serial7.readBytes(received, 9);
     msgCounter++;
+    
 
-    position = 0;
+    positionValue = 0;
+    // positionArray = ;
     vel = 0;
+    // Serial.println("am i stuck? 3");
 
     // Get position from bytes
     for (int i = 2; i < 6; i++)
     {
-      position = (position << 8) | received[i];
+      positionValue = (positionValue << 8) | received[i];
+      positionArray[i-2] = received[i];
     }
 
     // Get velocity from bytes
@@ -281,27 +300,19 @@ void loop()
     }
 
     sendToSensorhub = true;
+    // Serial.println("am i stuck? 4");
 
-    sendCAN(0x320, sizeof(received), received); // Send the CAN message
+    sendCAN(0x320, 4, positionArray); // Send the CAN message
+    // Serial.println("am i stuck? 5");
+
     Serial.print("\r||   Position: ");
-    Serial.print(position);
+    Serial.print(positionValue);
     Serial.print(". Velocity: ");
     Serial.print(vel);
     Serial.print("   ||");
 
   }
 
-
-  // if (millis() - lastPrintTime > printInterval)
-  // {
-  //   lastPrintTime = millis();
-  //   Serial.print("||   Msgs: ");
-  //   Serial.print(msgCounter);
-  //   Serial.print(" in ");
-  //   Serial.print(printInterval);
-  //   Serial.println("ms   ||    ");
-  //   msgCounter = 0;
-  // }
 
   
   if (Serial6.available()>= 7) {
@@ -343,20 +354,4 @@ void loop()
     
   }
 
-  if (millis() - lastPrintTime > printInterval) {
-    msg.id = 0x4B4; // Set the CAN ID
-    msg.len = 8; // Set the length of the message
-    msg.buf[0] = 10;
-    msg.buf[1] = 20;
-    msg.buf[2] = 30;
-    msg.buf[3] = 1;
-    msg.buf[4] = 40;
-    msg.buf[5] = 50;
-    msg.buf[6] = 60;
-    msg.buf[7] = 70;
-
-    can2.write(msg); // Send the CAN message
-    lastPrintTime = millis();
-    Serial.println("CAN message sent");
-  }
 }
