@@ -42,7 +42,7 @@ uint8_t positionArray[4];
 uint32_t prevPosition = -1000;
 uint32_t vel = 0;
 
-FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> can2;
+FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> can2;
 CAN_message_t msg;
 
 float precisionRangeStart = 20;
@@ -75,28 +75,20 @@ void printByteArrayBinary(uint8_t *arr, size_t length)
     if (i < length - 1)
       Serial.print(", "); // Add comma between bytes
   }
-  Serial.println(" }");
+  Serial.print(" }");
 }
 void sendCAN(int ID, uint8_t len, uint8_t *data)
 {
-  // Serial.println("am i stuck? 6");
   CAN_message_t msg;
   msg.id = ID; // Set the CAN ID
   msg.len = len; // Set the length of the message
-  // Serial.println("am i stuck? 7");
 
   for (int i = 0; i < len; i++)
   {
     msg.buf[i] = data[i]; // Copy the received data to the CAN message buffer
   }
-  // Serial.println("am i stuck? 8");  
 
   can2.write(msg); // Send the CAN message
-  // delay(10);
-  // Serial.print("CAN message sent!");
-  // Serial.println("am i stuck? 9");
-  // printByteArrayBinary(data, len);
-
 }
 float decodeTemperature(uint8_t encoded) {
   if (encoded & 0x80) {  // High precision mode
@@ -198,8 +190,8 @@ void sendDataToSensorHub(uint32_t pos)
   digitalWrite(DE_Temphub, HIGH); // Enable driver mode
   digitalWrite(RE_Temphub, HIGH); // Disable receiver mode (inverted)
 
-  Serial6.write(pos); // Send data over RS-422
-  Serial6.flush();                 // Wait for serial to finish sending
+  Serial8.write(pos); // Send data over RS-422
+  Serial8.flush();                 // Wait for serial to finish sending
 
   digitalWrite(DE_Temphub, LOW); // Disable driver mode
   digitalWrite(RE_Temphub, LOW); // Enable receiver mode (inverted)
@@ -244,8 +236,8 @@ void setup()
   delay(50);
 
   // %%% TEMPHUB SETUP %%%
-  Serial6.begin(9600); // Serial4 is the sensorhub
-  Serial6.setTimeout(1); // Set timeout for reading from RS-422
+  Serial8.begin(9600); // Serial4 is the sensorhub
+  Serial8.setTimeout(1); // Set timeout for reading from RS-422
 
   pinMode(DE_Temphub, OUTPUT);
   pinMode(RE_Temphub, OUTPUT);
@@ -270,21 +262,17 @@ void loop()
       sendCommandToSensor("SINGLE_POS_VEL");
     }
   }
-  // Serial.println("am i stuck? 1");
 
   // TODO: 9 bytes is for cyclic, 7 for non cyclic. fix
   if (Serial7.available() >= 9)
   {
-    // Serial.println("am i stuck? 2");
 
     Serial7.readBytes(received, 9);
     msgCounter++;
     
 
     positionValue = 0;
-    // positionArray = ;
     vel = 0;
-    // Serial.println("am i stuck? 3");
 
     // Get position from bytes
     for (int i = 2; i < 6; i++)
@@ -300,10 +288,8 @@ void loop()
     }
 
     sendToSensorhub = true;
-    // Serial.println("am i stuck? 4");
 
-    sendCAN(0x320, 4, positionArray); // Send the CAN message
-    // Serial.println("am i stuck? 5");
+      // sendCAN(0x320, 4, positionArray); // Send the CAN message
 
     Serial.print("\r||   Position: ");
     Serial.print(positionValue);
@@ -313,11 +299,16 @@ void loop()
 
   }
 
+  if (millis() - lastPrintTime > printInterval)
+  {
+    lastPrintTime = millis();
+    sendCAN(0x320, 4, positionArray); // Send the CAN message
+  }
 
   
-  if (Serial6.available()>= 7) {
+  if (Serial8.available()>= 7) {
     uint8_t received_temp[7];
-    Serial6.readBytes(received_temp, 7);
+    Serial8.readBytes(received_temp, 7);
 
     sendCAN(0x33A, sizeof(received_temp), received_temp); // Send the CAN message
 
@@ -333,6 +324,7 @@ void loop()
 
   if (can2.read(msg))
   {
+    // if (msg.id == 0x4BA){
     Serial.print("CAN message received: ");
     Serial.print("ID: ");
     Serial.print(msg.id, HEX);
@@ -353,5 +345,5 @@ void loop()
     Serial.println();
     
   }
-
+  // }
 }
