@@ -176,8 +176,8 @@ void sendCommandToSensor(const String command)
   digitalWrite(DE_Sensor, HIGH); // Enable driver mode
   digitalWrite(RE_Sensor, HIGH); // Disable receiver mode (inverted)
   // delay(5);  //allow sending to complete
-  Serial7.write(dataToSend, sizeof(dataToSend)); // Send data over RS-422
-  Serial7.flush();                                // Wait for serial to finish sending
+  Serial6.write(dataToSend, sizeof(dataToSend)); // Send data over RS-422
+  Serial6.flush();                                // Wait for serial to finish sending
 
   Serial.println("Command sent!\n");
 
@@ -190,8 +190,8 @@ void sendDataToSensorHub(uint32_t pos)
   digitalWrite(DE_Temphub, HIGH); // Enable driver mode
   digitalWrite(RE_Temphub, HIGH); // Disable receiver mode (inverted)
 
-  Serial8.write(pos); // Send data over RS-422
-  Serial8.flush();                 // Wait for serial to finish sending
+  Serial4.write(pos); // Send data over RS-422
+  Serial4.flush();                 // Wait for serial to finish sending
 
   digitalWrite(DE_Temphub, LOW); // Disable driver mode
   digitalWrite(RE_Temphub, LOW); // Enable receiver mode (inverted)
@@ -205,9 +205,10 @@ void setup()
 
   // %%% SENSOR SETUP %%%
   // RS-422 serial
-  Serial7.begin(115200); // Possible baud rates: 4800, 9600, 19200, 38400, 57600, 115200
-  Serial7.setTimeout(1); // Set timeout for reading from RS-422
-  // Serial1.setTX(24);
+  // Possible baud rates: 4800, 9600, 19200, 38400, 57600, 115200
+  Serial1.begin(115200); // Serial 1 is for receiving from the sensor
+  Serial6.begin(115200); // Serial 6 is for sending to the sensor
+  Serial1.setTimeout(1); // Set timeout for reading from RS-422
 
   pinMode(DE_Sensor, OUTPUT);
   pinMode(RE_Sensor, OUTPUT);
@@ -219,9 +220,9 @@ void setup()
   delay(1000);
 
   // Flush RS-422 buffer
-  while (Serial7.available() > 0)
+  while (Serial1.available() > 0)
   {
-    Serial7.read();
+    Serial1.read();
   }
 
   // Request: start cyclic sending (see webConfig for cycle time)
@@ -236,23 +237,19 @@ void setup()
   delay(50);
 
   // %%% TEMPHUB SETUP %%%
-  Serial8.begin(9600); // Serial4 is the sensorhub
-  Serial8.setTimeout(1); // Set timeout for reading from RS-422
+  Serial5.begin(9600); // Serial 5 is for receiving from the temp hub
+  Serial4.begin(9600); // Serial4 is for sending to the temp hub
+  Serial4.setTimeout(1); // Set timeout for reading from RS-422
 
   pinMode(DE_Temphub, OUTPUT);
   pinMode(RE_Temphub, OUTPUT);
 
   digitalWrite(DE_Temphub, LOW); // Disable driver mode
   digitalWrite(RE_Temphub, LOW); // Enable receiver mode (inverted)
- 
-  // % CAN SETUP %%%
-  can2.begin();
-  can2.setBaudRate(1000000); // Set CAN baud rate to 1 Mbps
-}
+ }
 
 void loop()
 {
-  // Serial.println("Loop!");
   uint8_t received[9];
 
   if (!REQUEST_CYCLIC){
@@ -264,10 +261,10 @@ void loop()
   }
 
   // TODO: 9 bytes is for cyclic, 7 for non cyclic. fix
-  if (Serial7.available() >= 9)
+  if (Serial1.available() >= 9)
   {
 
-    Serial7.readBytes(received, 9);
+    Serial1.readBytes(received, 9);
     msgCounter++;
     
 
@@ -287,63 +284,17 @@ void loop()
       vel = (vel << 8) | received[i];
     }
 
-    sendToSensorhub = true;
-
-      // sendCAN(0x320, 4, positionArray); // Send the CAN message
-
     Serial.print("\r||   Position: ");
     Serial.print(positionValue);
     Serial.print(". Velocity: ");
     Serial.print(vel);
     Serial.print("   ||");
 
+    Serial4.write(positionValue); // Send data over RS-422
+    Serial4.flush(); // Wait for serial to finish sending
+
   }
 
-  if (millis() - lastPrintTime > printInterval)
-  {
-    lastPrintTime = millis();
-    sendCAN(0x320, 4, positionArray); // Send the CAN message
-  }
 
   
-  if (Serial8.available()>= 7) {
-    uint8_t received_temp[7];
-    Serial8.readBytes(received_temp, 7);
-
-    sendCAN(0x33A, sizeof(received_temp), received_temp); // Send the CAN message
-
-    Serial.print("       Received from temp hub: ");
-    Serial.print("{ ");
-    for (int i = 0; i < 7; i++)
-    {
-      Serial.print(decodeTemperature(received_temp[i]));
-      Serial.print(" ");
-    }
-    Serial.print("}  ||");
-  }
-
-  if (can2.read(msg))
-  {
-    // if (msg.id == 0x4BA){
-    Serial.print("CAN message received: ");
-    Serial.print("ID: ");
-    Serial.print(msg.id, HEX);
-    Serial.print(" Length: ");
-    Serial.print(msg.len);
-    Serial.print(" Data: ");
-    for (int i = 0; i < msg.len; i++)
-    {
-      byte b = msg.buf[i];
-      Serial.print(b, HEX);
-      Serial.print(" (");
-      for (int bit = 7; bit >= 0; bit--)
-      {
-        Serial.print((b >> bit) & 1);
-      }
-      Serial.print("); ");
-    }
-    Serial.println();
-    
-  }
-  // }
 }
