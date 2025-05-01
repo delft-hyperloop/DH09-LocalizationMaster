@@ -5,8 +5,8 @@
 #define RE_Sensor 31
 #define DE_Sensor 32
 
-#define RE_Temphub 26
-#define DE_Temphub 27
+#define RE_Temphub 19
+#define DE_Temphub 18
 
 
 bool REQUEST_CYCLIC = true;
@@ -237,16 +237,15 @@ void setup()
   delay(50);
 
   // %%% TEMPHUB SETUP %%%
-  Serial5.begin(9600); // Serial 5 is for receiving from the temp hub
-  Serial4.begin(9600); // Serial4 is for sending to the temp hub
-  Serial4.setTimeout(1); // Set timeout for reading from RS-422
-
+  Serial5.begin(9600, SERIAL_8N1_RXINV); // Serial 5 is for receiving from the temp hub
+  Serial4.begin(9600, SERIAL_8N1_RXINV); // Serial4 is for sending to the temp hub
+ 
   pinMode(DE_Temphub, OUTPUT);
   pinMode(RE_Temphub, OUTPUT);
 
-  digitalWrite(DE_Temphub, LOW); // Disable driver mode
+  digitalWrite(DE_Temphub, HIGH); // Disable driver mode
   digitalWrite(RE_Temphub, LOW); // Enable receiver mode (inverted)
- }
+}
 
 void loop()
 {
@@ -290,7 +289,7 @@ void loop()
     Serial.print(vel);
     Serial.print("   ||");
 
-    Serial4.write(positionValue); // Send data over RS-422
+    Serial4.write(positionArray, 4); // Send data over RS-422
     Serial4.flush(); // Wait for serial to finish sending
 
   }
