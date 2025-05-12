@@ -2,8 +2,8 @@
 #include <FlexCAN_T4.h>
 #include <Flexcan_T4.h>
 
-#define RE_Sensor 31
-#define DE_Sensor 32
+#define RE_Sensor 2
+#define DE_Sensor 3
 
 #define RE_Temphub 19
 #define DE_Temphub 18
@@ -38,9 +38,11 @@ long msgCounterReceived = 0;
 bool sendToSensorhub = false;
 
 uint32_t positionValue = 0;
+uint8_t velocityArray[2];
 uint8_t positionArray[4];
+uint8_t sendArray[6];
 uint32_t prevPosition = -1000;
-uint32_t vel = 0;
+int16_t vel = 0;
 
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> can2;
 CAN_message_t msg;
@@ -237,8 +239,8 @@ void setup()
   delay(50);
 
   // %%% TEMPHUB SETUP %%%
-  Serial5.begin(9600, SERIAL_8N1_RXINV); // Serial 5 is for receiving from the temp hub
-  Serial4.begin(9600, SERIAL_8N1_RXINV); // Serial4 is for sending to the temp hub
+  Serial5.begin(115200, SERIAL_8N1_RXINV); // Serial 5 is for receiving from the temp hub
+  Serial4.begin(115200, SERIAL_8N1_RXINV); // Serial4 is for sending to the temp hub
  
   pinMode(DE_Temphub, OUTPUT);
   pinMode(RE_Temphub, OUTPUT);
@@ -277,21 +279,41 @@ void loop()
       positionArray[i-2] = received[i];
     }
 
+    velocityArray[0] = received[6];
+    velocityArray[1] = received[7];
+
     // Get velocity from bytes
     for (int i = 6; i < 8; i++)
     {
       vel = (vel << 8) | received[i];
     }
-
-    Serial.print("\r||   Position: ");
-    Serial.print(positionValue);
-    Serial.print(". Velocity: ");
-    Serial.print(vel);
-    Serial.print("   ||");
-
-    Serial4.write(positionArray, 4); // Send data over RS-422
-    Serial4.flush(); // Wait for serial to finish sending
-
+    if (positionValue < 9e6){
+      Serial.print("\r||   Position: ");
+      Serial.print(positionValue);
+      Serial.print(". Velocity: ");
+      Serial.print(vel);
+      Serial.print("   ||");
+      // Serial4.write(positionArray, 4); // Send data over RS-422
+      for (size_t i = 0; i < 4; i++)
+      {
+        sendArray[i] = positionArray[i];
+        Serial.print(i);
+        Serial.print(": ");
+        Serial.print(sendArray[i]);
+        Serial.print(", ");
+      }
+      sendArray[4] = (abs(vel) >> 8);
+      sendArray[5] = (abs(vel) & 0xFF);
+      Serial.print("4");
+      Serial.print(": ");
+      Serial.print(sendArray[4]);
+      Serial.print(", ");
+      Serial.print("5");
+      Serial.print(": ");
+      Serial.print(sendArray[5]);
+      Serial4.write(sendArray, 6);
+      Serial4.flush(); // Wait for serial to finish sending
+    }
   }
 
 
