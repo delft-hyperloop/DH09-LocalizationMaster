@@ -138,11 +138,9 @@ void loop() {
     if (Serial5.read() == START_BYTE) {
       timer.end(); // Stop the timer
       timer.begin(sendData, 100000); // Start the timer to send response every 1/10second
-      Serial5.flush();
     }
     if (Serial5.read() == STOP_BYTE) {
       timer.end(); // Stop the timer
-      Serial5.flush();
     }
   }
 }
