@@ -70,11 +70,12 @@ void setup() {
   
   // -------------------- EEPROM --------------------
   // EEPROM.write(SLAVE_ID_ADDR, 0xB1); // Initialize EEPROM
-  SLAVE_ID = EEPROM.read(SLAVE_ID_ADDR);
-  if (SLAVE_ID == 0xFF) {
-    SLAVE_ID = 0xB1; // Default ID if unset
-    EEPROM.write(SLAVE_ID_ADDR, SLAVE_ID);
-  }
+  // SLAVE_ID = EEPROM.read(SLAVE_ID_ADDR);
+  // if (SLAVE_ID == 0xFF) {
+  //   SLAVE_ID = 0xB1; // Default ID if unset
+  //   EEPROM.write(SLAVE_ID_ADDR, SLAVE_ID);
+  // }
+  SLAVE_ID = 0xB1; // Default ID if unset
   configValue = EEPROM.read(CONFIG_ADDR);
   Serial.println("EEPROM initialized.");
   // ------------------------------------------------
