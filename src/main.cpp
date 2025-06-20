@@ -59,13 +59,15 @@ void setup() {
   // ----------------------------------------------
 
   // --------------- SENSORHUB SETUP ---------------
-  Serial5.begin(115200); // Serial5 is for receiving from the sensor hub
-  Serial4.begin(115200); // Serial4 is for sending to the sensor hub
+  Serial5.begin(115200, SERIAL_8N1_RXINV); // Serial5 is for receiving from the sensor hub
+  Serial4.begin(115200, SERIAL_8N1_RXINV); // Serial4 is for sending to the sensor hub
   pinMode(RE_Senshub, OUTPUT);
   pinMode(DE_Senshub, OUTPUT);
   digitalWrite(RE_Senshub, LOW); // Enable receiver mode (inverted)
   digitalWrite(DE_Senshub, HIGH); // Enable receiver mode (inverted)
   Serial.println("Sensor hub initialized.");
+  timer.begin(sendData, 100000); // Start the timer to send response every 1/10second
+
   // -----------------------------------------------
   
   // -------------------- EEPROM --------------------
@@ -135,11 +137,17 @@ void loop() {
     }
   }
   if (Serial5.available() > 0) {
+    Serial.println("Data received from sensor hub.");
+
+    // Read the start byte
     if (Serial5.read() == START_BYTE) {
+      Serial.println("Start byte received, sending data...");
       timer.end(); // Stop the timer
       timer.begin(sendData, 100000); // Start the timer to send response every 1/10second
     }
     if (Serial5.read() == STOP_BYTE) {
+      Serial.println("Stop byte received, stopping data sending.");
+      // Read the command byte
       timer.end(); // Stop the timer
     }
   }
@@ -148,13 +156,13 @@ void loop() {
 void sendData() {
   frame[0] = SLAVE_ID;
   frame[7] = (frame[0] + frame[1] + frame[2] + frame[3] + frame[4] + frame[5] + frame[6]) % 256;
-  for (size_t i = 0; i < 8; i++)
-  {
-    Serial.print("0x");
-    Serial.print(frame[i], HEX);
-    Serial.print(" ");
-  }
-  Serial.println();
+  // for (size_t i = 0; i < 8; i++)
+  // {
+  //   Serial.print("0x");
+  //   Serial.print(frame[i], HEX);
+  //   Serial.print(" ");
+  // }
+  // Serial.println();
   Serial4.write(frame, 8);
   Serial4.flush();
 }
