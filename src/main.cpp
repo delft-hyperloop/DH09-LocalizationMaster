@@ -136,21 +136,21 @@ void loop() {
       frame[6] = (abs(velocityValue) & 0xFF);
     }
   }
-  if (Serial5.available() > 0) {
-    Serial.println("Data received from sensor hub.");
+  // if (Serial5.available() > 0) {
+  //   Serial.println("Data received from sensor hub.");
 
-    // Read the start byte
-    if (Serial5.read() == START_BYTE) {
-      Serial.println("Start byte received, sending data...");
-      timer.end(); // Stop the timer
-      timer.begin(sendData, 100000); // Start the timer to send response every 1/10second
-    }
-    if (Serial5.read() == STOP_BYTE) {
-      Serial.println("Stop byte received, stopping data sending.");
-      // Read the command byte
-      timer.end(); // Stop the timer
-    }
-  }
+  //   // Read the start byte
+  //   if (Serial5.read() == START_BYTE) {
+  //     Serial.println("Start byte received, sending data...");
+  //     timer.end(); // Stop the timer
+  //     timer.begin(sendData, 100000); // Start the timer to send response every 1/10second
+  //   }
+  //   if (Serial5.read() == STOP_BYTE) {
+  //     Serial.println("Stop byte received, stopping data sending.");
+  //     // Read the command byte
+  //     timer.end(); // Stop the timer
+  //   }
+  // }
 }
 
 void sendData() {
