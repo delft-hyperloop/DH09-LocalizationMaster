@@ -26,6 +26,7 @@ uint8_t velocityArray[2];
 uint8_t positionArray[4];
 
 uint8_t frame[8];
+int sendingFrequency = 200; // Frequency to send data to sensor hub in Hz
 
 long trackData[2][2] = {{1188, 0}, {125856, 125516}};
 
@@ -66,7 +67,7 @@ void setup() {
   digitalWrite(RE_Senshub, LOW); // Enable receiver mode (inverted)
   digitalWrite(DE_Senshub, HIGH); // Enable receiver mode (inverted)
   Serial.println("Sensor hub initialized.");
-  timer.begin(sendData, 100000); // Start the timer to send response every 1/10second
+  timer.begin(sendData, 1e6/sendingFrequency); // Start the timer to send response every 1/10second
 
   // -----------------------------------------------
   
@@ -156,13 +157,14 @@ void loop() {
 void sendData() {
   frame[0] = SLAVE_ID;
   frame[7] = (frame[0] + frame[1] + frame[2] + frame[3] + frame[4] + frame[5] + frame[6]) % 256;
-  // for (size_t i = 0; i < 8; i++)
-  // {
-  //   Serial.print("0x");
-  //   Serial.print(frame[i], HEX);
-  //   Serial.print(" ");
-  // }
-  // Serial.println();
+  for (size_t i = 0; i < 8; i++)
+  {
+    Serial.print("0x");
+    Serial.print(frame[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+
   Serial4.write(frame, 8);
   Serial4.flush();
 }
