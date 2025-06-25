@@ -9,6 +9,7 @@
 
 #define STOP_BYTE 0x50
 #define START_BYTE 0x80
+#define RESET_BYTE 0x100
 #define CMD_REQUEST_DATA 0x01
 #define CMD_SET_CONFIG   0x02
 
@@ -19,6 +20,7 @@ uint8_t SLAVE_ID;
 uint8_t configValue;
 byte dataToSend[3];
 IntervalTimer timer;
+int sendFrequency = 200; // Frequency to send data to sensor hub in Hz
 
 int16_t velocityValue = 0;
 uint32_t positionValue = 0;
@@ -61,7 +63,7 @@ void setup() {
 
   // --------------- SENSORHUB SETUP ---------------
   Serial5.begin(115200, SERIAL_8N1_RXINV); // Serial5 is for receiving from the sensor hub
-  Serial4.begin(115200, SERIAL_8N1_RXINV); // Serial4 is for sending to the sensor hub
+    Serial4.begin(115200, SERIAL_8N1_RXINV); // Serial4 is for sending to the sensor hub
   pinMode(RE_Senshub, OUTPUT);
   pinMode(DE_Senshub, OUTPUT);
   digitalWrite(RE_Senshub, LOW); // Enable receiver mode (inverted)
@@ -139,17 +141,26 @@ void loop() {
   }
   // if (Serial5.available() > 0) {
   //   Serial.println("Data received from sensor hub.");
-
-  //   // Read the start byte
-  //   if (Serial5.read() == START_BYTE) {
-  //     Serial.println("Start byte received, sending data...");
-  //     timer.end(); // Stop the timer
-  //     timer.begin(sendData, 100000); // Start the timer to send response every 1/10second
-  //   }
-  //   if (Serial5.read() == STOP_BYTE) {
-  //     Serial.println("Stop byte received, stopping data sending.");
-  //     // Read the command byte
-  //     timer.end(); // Stop the timer
+  //   uint8_t id = Serial5.read(); // Read the ID byte
+  //   switch (id) {
+  //     case START_BYTE:
+  //       Serial.println("Start byte received.");
+  //       // Restart the timer
+  //       timer.end(); 
+  //       timer.begin(sendData, 1e6/sendingFrequency); 
+  //       break;
+  //     case STOP_BYTE:
+  //       Serial.println("Stop byte received.");
+  //       timer.end(); // Stop the timer
+  //       break;
+  //     case RESET_BYTE:
+  //       Serial.println("Reset byte received. Resetting Teensy...");
+  //       resetTeensy(); // Reset Teensy
+  //       break;
+  //     default:
+  //       Serial.print("Unknown command received: ");
+  //       Serial.println(id, HEX);
+  //       break;
   //   }
   // }
 }
@@ -168,58 +179,6 @@ void sendData() {
   Serial4.write(frame, 8);
   Serial4.flush();
 }
-
-
-// #include <Arduino.h>
-// #include <FlexCAN_T4.h>
-// #include <Flexcan_T4.h>
-
-// #define RE_Sensor 2
-// #define DE_Sensor 3
-
-// #define RE_Temphub 19
-// #define DE_Temphub 18
-
-
-// bool REQUEST_CYCLIC = true;
-
-// int msgLength = 9;
-
-// long lastSendTime = 0;
-// long requestInterval = 1000;
-// long lastPrintTime = 0;
-// long printInterval = 1000;
-
-// long timeSinceLastByte = 0;
-// long byteTime[9];
-
-// long msgCounter = 0;
-// long msgCounterReceived = 0;
-
-// bool sendToSensorhub = false;
-
-// uint32_t prevPosition = -1000;
-// FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> can2;
-// CAN_message_t msg;
-
-// float precisionRangeStart = 20;
-// float precisionRangeEnd = 30;
-
-
-// void printByteArrayBinary(uint8_t *arr, size_t length)
-// {
-//   Serial.print("{ ");
-//   for (size_t i = 0; i < length; i++)
-//   {
-//     for (int bit = 7; bit >= 0; bit--)
-//     {
-//       Serial.print((arr[i] >> bit) & 1); // Extract and print each bit
-//     }
-//     if (i < length - 1)
-//       Serial.print(", "); // Add comma between bytes
-//   }
-//   Serial.print(" }");
-// }
 
 
 void sendCommandToSensor(CommandType cmd)
@@ -277,132 +236,8 @@ void sendCommandToSensor(CommandType cmd)
   digitalWrite(RE_Sensor, LOW); // Enable receiver mode (inverted)
 }
 
-// void sendDataToSensorHub(uint32_t pos)
-// {
-//   digitalWrite(DE_Temphub, HIGH); // Enable driver mode
-//   digitalWrite(RE_Temphub, HIGH); // Disable receiver mode (inverted)
-
-//   Serial4.write(pos); // Send data over RS-422
-//   Serial4.flush();                 // Wait for serial to finish sending
-
-//   digitalWrite(DE_Temphub, LOW); // Disable driver mode
-//   digitalWrite(RE_Temphub, LOW); // Enable receiver mode (inverted)
-// }
-
-// void setup()
-// {
-//   Serial.begin(9600); // USB serial
-//   delay(2000);
-//   Serial.println("Starting");
-
-//   // %%% SENSOR SETUP %%%
-//   // RS-422 serial
-//   // Possible baud rates: 4800, 9600, 19200, 38400, 57600, 115200
-//   Serial1.begin(115200); // Serial 1 is for receiving from the sensor
-//   Serial6.begin(115200); // Serial 6 is for sending to the sensor
-//   Serial1.setTimeout(1); // Set timeout for reading from RS-422
-
-//   pinMode(DE_Sensor, OUTPUT);
-//   pinMode(RE_Sensor, OUTPUT);
-
-//   delay(100); // Wait for the RS-422 to initialize
-
-//   // Request: stop sending
-//   sendCommandToSensor("STOP");
-//   delay(1000);
-
-//   // Flush RS-422 buffer
-//   while (Serial1.available() > 0)
-//   {
-//     Serial1.read();
-//   }
-
-//   // Request: start cyclic sending (see webConfig for cycle time)
-//   if (REQUEST_CYCLIC)
-//   {
-//     sendCommandToSensor("CYCLIC_POS_VEL");
-//   }
-
-//   delay(50);
-
-//   // %%% TEMPHUB SETUP %%%
-//   Serial5.begin(115200, SERIAL_8N1_RXINV); // Serial 5 is for receiving from the temp hub
-//   Serial4.begin(115200, SERIAL_8N1_RXINV); // Serial4 is for sending to the temp hub
- 
-//   pinMode(DE_Temphub, OUTPUT);
-//   pinMode(RE_Temphub, OUTPUT);
-
-//   digitalWrite(DE_Temphub, HIGH); // Disable driver mode
-//   digitalWrite(RE_Temphub, LOW); // Enable receiver mode (inverted)
-// }
-
-// void loop()
-// {
-//   uint8_t received[9];
-
-//   if (!REQUEST_CYCLIC){
-//     if (millis() - lastSendTime > requestInterval) {
-//       Serial.println("\nRequesting data");
-//       lastSendTime = millis();
-//       sendCommandToSensor("SINGLE_POS_VEL");
-//     }
-//   }
-
-//   // TODO: 9 bytes is for cyclic, 7 for non cyclic. fix
-//   if (Serial1.available() >= 9)
-//   {
-
-//     Serial1.readBytes(received, 9);
-//     msgCounter++;
-    
-
-//     positionValue = 0;
-//     vel = 0;
-
-//     // Get position from bytes
-//     for (int i = 2; i < 6; i++)
-//     {
-//       positionValue = (positionValue << 8) | received[i];
-//       positionArray[i-2] = received[i];
-//     }
-
-//     velocityArray[0] = received[6];
-//     velocityArray[1] = received[7];
-
-//     // Get velocity from bytes
-//     for (int i = 6; i < 8; i++)
-//     {
-//       vel = (vel << 8) | received[i];
-//     }
-//     if (positionValue < 9e6){
-//       Serial.print("\r||   Position: ");
-//       Serial.print(positionValue);
-//       Serial.print(". Velocity: ");
-//       Serial.print(vel);
-//       Serial.print("   ||");
-//       // Serial4.write(positionArray, 4); // Send data over RS-422
-//       for (size_t i = 0; i < 4; i++)
-//       {
-//         sendArray[i] = positionArray[i];
-//         Serial.print(i);
-//         Serial.print(": ");
-//         Serial.print(sendArray[i]);
-//         Serial.print(", ");
-//       }
-//       sendArray[4] = (abs(vel) >> 8);
-//       sendArray[5] = (abs(vel) & 0xFF);
-//       Serial.print("4");
-//       Serial.print(": ");
-//       Serial.print(sendArray[4]);
-//       Serial.print(", ");
-//       Serial.print("5");
-//       Serial.print(": ");
-//       Serial.print(sendArray[5]);
-//       Serial4.write(sendArray, 6);
-//       Serial4.flush(); // Wait for serial to finish sending
-//     }
-//   }
-
-
-  
-// }
+void resetTeensy(){
+  // Reset the Teensy board
+  SCB_AIRCR = 0x05FA0004;
+  while (1);  
+}
