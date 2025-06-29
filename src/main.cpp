@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <EEPROM.h>
+#include "TrackDataStruct.h"
+#include "TrackDataTable.h"
 
 #define RE_Sensor 2
 #define DE_Sensor 3
@@ -20,7 +22,6 @@ uint8_t SLAVE_ID;
 uint8_t configValue;
 byte dataToSend[3];
 IntervalTimer timer;
-int sendFrequency = 200; // Frequency to send data to sensor hub in Hz
 
 int16_t velocityValue = 0;
 uint32_t positionValue = 0;
@@ -43,8 +44,14 @@ enum CommandType
   UNKNOWN,
 };
 
+TrackData trackDataLeft[leftDataTableSize]; // we will only use the right side this year, but i added left side for future (you are welcome DH10 <3)
+TrackData trackDataRight[rightDataTableSize];
+
 void sendCommandToSensor(CommandType cmd);
 void sendData();
+void writeTrackDataToEEPROM();
+void readTrackDataFromEEPROM();
+void resetTeensy();
 
 void setup() {
   // ---------------------- USB ---------------------
@@ -73,7 +80,7 @@ void setup() {
 
   // -----------------------------------------------
   
-  // -------------------- EEPROM --------------------
+  // -------------------- EEPROM CONFIG --------------------
   // EEPROM.write(SLAVE_ID_ADDR, 0xB1); // Initialize EEPROM
   // SLAVE_ID = EEPROM.read(SLAVE_ID_ADDR);
   // if (SLAVE_ID == 0xFF) {
@@ -83,6 +90,12 @@ void setup() {
   SLAVE_ID = 0xB1; // Default ID if unset
   configValue = EEPROM.read(CONFIG_ADDR);
   Serial.println("EEPROM initialized.");
+  // ------------------------------------------------
+
+  // -------------------- EEPROM TRACK DATA --------------------
+  writeTrackDataToEEPROM(); // Write track data to EEPROM
+  readTrackDataFromEEPROM(); // Read track data from EEPROM
+  Serial.println("Track data initialized.");
   // ------------------------------------------------
 
   // ----------------- SENSOR SETUP ----------------
@@ -99,9 +112,8 @@ void setup() {
 }
 
 void loop() {
+  // ----------------- GET SENSOR DATA ----------------
   uint8_t received[9];
-
-  // TODO: 9 bytes is for cyclic, 7 for non cyclic. fix
   if (Serial1.available() >= 9)
   {
     Serial1.readBytes(received, 9);
@@ -139,6 +151,23 @@ void loop() {
       frame[6] = (abs(velocityValue) & 0xFF);
     }
   }
+
+  // ---------------------------------------------------
+
+
+
+  // ----------------- DE-SCRAMBLE DATA ----------------
+  for (int i = 0; i < rightDataTableSize; i++) {
+    // Check if the read value lies within the current track data range
+    if (positionValue >= trackDataRight[i].barcodeStart && positionValue <= trackDataRight[i].barcodeEnd) {
+      // If it does, convert it based on the actual position (linear interpolation)
+      float actualPosition = trackDataRight[i].actualStart + (positionValue - trackDataRight[i].barcodeStart) * (trackDataRight[i].actualEnd - trackDataRight[i].actualStart) / (trackDataRight[i].barcodeEnd - trackDataRight[i].barcodeStart);
+    }
+  }
+
+  // ---------------------------------------------------
+
+  // ----------------- SENSOR HUB COMMUNICATION ----------------
   // if (Serial5.available() > 0) {
   //   Serial.println("Data received from sensor hub.");
   //   uint8_t id = Serial5.read(); // Read the ID byte
@@ -163,6 +192,7 @@ void loop() {
   //       break;
   //   }
   // }
+  // ---------------------------------------------------
 }
 
 void sendData() {
@@ -240,4 +270,57 @@ void resetTeensy(){
   // Reset the Teensy board
   SCB_AIRCR = 0x05FA0004;
   while (1);  
+}
+
+// This all is a bit overkill, only when you wanna update data without flashing. 
+// I will leave it for now, but it could be skipped without many consequences
+void writeTrackDataToEEPROM() {
+  const uint8_t initByte = 0x42;
+
+  if (EEPROM.read(0) == initByte) {
+    Serial.println("Track data already in EEPROM.");
+    return;
+  }
+
+  int address = 1; // Start writing after the init byte
+  Serial.println("Writing init byte to EEPROM...");
+  EEPROM.write(0, initByte); // Write init byte to indicate data is present
+  Serial.println("Writing track data to EEPROM...");
+  
+  for (int i = 0; i < leftDataTableSize; i++) {
+    EEPROM.put(address, trackDataLeft[i]);
+    address += sizeof(TrackData);
+  }
+
+  for (int i = 0; i < rightDataTableSize; i++) {
+    EEPROM.put(address, trackDataRight[i]);
+    address += sizeof(TrackData);
+  }
+
+  Serial.println("Track data written to EEPROM successfully.");
+
+}
+
+void readTrackDataFromEEPROM() {
+  const uint8_t initByte = 0x42;
+
+  if (EEPROM.read(0) != initByte) {
+    Serial.println("No track data in EEPROM.");
+    return;
+  }
+
+  int address = 1; // Start reading after the init byte
+  Serial.println("Reading track data from EEPROM...");
+
+  for (int i = 0; i < leftDataTableSize; i++) {
+    EEPROM.get(address, trackDataLeft[i]);
+    address += sizeof(TrackData);
+  }
+
+  for (int i = 0; i < rightDataTableSize; i++) {
+    EEPROM.get(address, trackDataRight[i]);
+    address += sizeof(TrackData);
+  }
+
+  Serial.println("Track data read from EEPROM successfully.");
 }
