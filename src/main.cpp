@@ -107,7 +107,7 @@ void setup() {
   digitalWrite(RE_Senshub, LOW); // Enable receiver mode (inverted)
   digitalWrite(DE_Senshub, HIGH); // Enable receiver mode (inverted)
   Serial.println("Sensor hub initialized.");
-  // timer.begin(sendData, 1e6/sendingFrequency); // Start the timer to send response every 1/10second
+  timer.begin(sendData, 1e6/sendingFrequency); // Start the timer to send response every 1/10second
 
   // -----------------------------------------------
   
@@ -134,6 +134,7 @@ void setup() {
   // -----------------------------------------------
 
   Serial.println("Setup complete.");
+
 }
 
 void loop() {
@@ -153,6 +154,15 @@ void loop() {
       positionValue = (positionValue << 8) | received[i];
       positionArray[i-2] = received[i];
     }
+    
+    // Modify back sensor to have the same values as the front
+    if (SLAVE_ID == 0xB2) {
+      positionValue -= 207395; // Make it so that the position matches the other sensor
+      positionArray[0] = (positionValue >> 24) & 0xFF;  
+      positionArray[1] = (positionValue >> 16) & 0xFF;  
+      positionArray[2] = (positionValue >> 8)  & 0xFF;  
+      positionArray[3] = (positionValue)       & 0xFF;
+  }
 
     velocityArray[0] = received[6];
     velocityArray[1] = received[7];
@@ -179,39 +189,40 @@ void loop() {
     if (heartbeatHandler.connected) { Serial.print(heartbeatHandler.heartbeatChar + "   ||  "); }
   }
   if (Serial5.available() > 0) {
-    uint8_t id = Serial5.read(); // Read the ID byte
-    switch (id) {
-      case HEARTBEAT_BYTE:
-        if (!heartbeatHandler.connected) {
-          Serial.println("\n\n==================================================");
-          Serial.println("Received heartbeat from Sensor Hub while being disconnected. Performing handshake...");
-          doHandshake(); // Perform handshake with sensor hub. If not succesful, Teensy will reset
-          heartbeatHandler.connect(); // Start heartbeat timer
-
-        } else {
-          heartbeatHandler.beat(); // Update heartbeat time
-        }
-      break;
-      case STOP_BYTE:
-        Serial.println("Stop byte received from Sensor Hub.");
-        timer.end(); // Stop the timer
-        break;
-      case RESET_BYTE:
-        Serial.println("Reset byte received from Sensor Hub. Resetting Teensy...");
-        resetTeensy(); // Reset Teensy
-        break;
-      default:
-        Serial.print("Unknown command received from Sensor Hub: ");
-        Serial.println(id, HEX);
-        break;
-    }
+      uint8_t id = Serial5.read(); // Read the ID byte
   }
+  //   switch (id) {
+  //     case HEARTBEAT_BYTE:
+  //       if (!heartbeatHandler.connected) {
+  //         Serial.println("\n\n==================================================");
+  //         Serial.println("Received heartbeat from Sensor Hub while being disconnected. Performing handshake...");
+  //         doHandshake(); // Perform handshake with sensor hub. If not succesful, Teensy will reset
+  //         heartbeatHandler.connect(); // Start heartbeat timer
 
-  if (heartbeatHandler.connected && !heartbeatHandler.isAlive()) {
-    Serial.println("Heartbeat timeout. Stopping data stream."); 
-    timer.end();
-    heartbeatHandler.disconnect();
-  }
+  //       } else {
+  //         heartbeatHandler.beat(); // Update heartbeat time
+  //       }
+  //     break;
+  //     case STOP_BYTE:
+  //       Serial.println("Stop byte received from Sensor Hub.");
+  //       timer.end(); // Stop the timer
+  //       break;
+  //     case RESET_BYTE:
+  //       Serial.println("Reset byte received from Sensor Hub. Resetting Teensy...");
+  //       resetTeensy(); // Reset Teensy
+  //       break;
+  //     default:
+  //       Serial.print("Unknown command received from Sensor Hub: 0x");
+  //       Serial.println(id, HEX);
+  //       break;
+  //   }
+  
+
+  // if (heartbeatHandler.connected && !heartbeatHandler.isAlive()) {
+  //   Serial.println("Heartbeat timeout. Stopping data stream."); 
+  //   timer.end();
+  //   heartbeatHandler.disconnect();
+  // }
 }
 
 void sendData() {
