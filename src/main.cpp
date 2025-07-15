@@ -79,17 +79,6 @@ int sendingFrequency = 200; // Frequency to send data to sensor hub in Hz
 
 long trackData[2][2] = {{1188, 0}, {125856, 125516}};
 
-enum CommandType
-{
-  STOP,
-  CYCLIC_POS,
-  CYCLIC_POS_VEL,
-  SINGLE_POS,
-  SINGLE_POS_VEL,
-  STANDBY,
-  UNKNOWN,
-};
-
 TrackData trackDataLeft[leftDataTableSize]; // we will only use the right side this year, but i added left side for future (you are welcome DH10 <3)
 TrackData trackDataRight[rightDataTableSize];
 
@@ -223,12 +212,37 @@ void loop() {
 
   // ----------------- DE-SCRAMBLE DATA ----------------
   for (int i = 0; i < rightDataTableSize; i++) {
+    float actualPosition = -1;
     // Check if the read value lies within the current track data range
+    Serial.print("omg this is my turn: ");
+    Serial.print(trackDataRight[i].id);
+    Serial.print(trackDataRight[i].length);
+    Serial.print(trackDataRight[i].actualStart);
+    Serial.print(trackDataRight[i].actualEnd);
+    Serial.print(trackDataRight[i].barcodeStart);
+    Serial.print(trackDataRight[i].barcodeEnd);
+    Serial.print(" ");
+    Serial.println();
     if (positionValue >= trackDataRight[i].barcodeStart && positionValue <= trackDataRight[i].barcodeEnd) {
+      Serial.print("omg omg omg im in range");
+      Serial.print("Barcode start: " + String(trackDataRight[i].barcodeStart) + " Barcode end: " + String(trackDataRight[i].barcodeEnd));
+      actualPosition = trackDataRight[i].actualStart + (positionValue - trackDataRight[i].barcodeStart) * (trackDataRight[i].actualEnd - trackDataRight[i].actualStart) / (trackDataRight[i].barcodeEnd - trackDataRight[i].barcodeStart);
+      Serial.print("Sensor reading: " + String(positionValue) + " Actual position " + String(actualPosition));
       // If it does, convert it based on the actual position (linear interpolation)
-      float actualPosition = trackDataRight[i].actualStart + (positionValue - trackDataRight[i].barcodeStart) * (trackDataRight[i].actualEnd - trackDataRight[i].actualStart) / (trackDataRight[i].barcodeEnd - trackDataRight[i].barcodeStart);
     }
-  }
+
+  //   if (actualPosition != -1) {
+  //     uint32_t actualPositionInt32 = (uint32_t)actualPosition;
+  //     positionArray[0] = (actualPositionInt32 >> 24) & 0xFF;  
+  //     positionArray[1] = (actualPositionInt32 >> 16) & 0xFF;  
+  //     positionArray[2] = (actualPositionInt32 >> 8)  & 0xFF;  
+  //     positionArray[3] = (actualPositionInt32)       & 0xFF;
+  //   } else {
+  //     Serial.println("No actual position found");
+  //     // TODO: add interpolation from velocity?
+  //   }
+
+  // }
 
   // ---------------------------------------------------
 
@@ -241,7 +255,7 @@ void loop() {
   //       if (!heartbeatHandler.connected) {
   //         Serial.println("\n\n==================================================");
   //         Serial.println("Received heartbeat from Sensor Hub while being disconnected. Performing handshake...");
-  //         doHandshake(); // Perform handshake with sensor hub. If not succesful, Teensy will reset
+  //         doHandshake(); // Perform handshake with sensor hub. If not successful, Teensy will reset
   //         heartbeatHandler.connect(); // Start heartbeat timer
 
   //       } else {
@@ -262,6 +276,7 @@ void loop() {
   //       break;
   //   }
   // }
+
 }
 
 void sendData() {

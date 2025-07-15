@@ -6,9 +6,17 @@
 const TrackData leftDataTable[] = {};
 
 // TODO: add right values
+// TrackData definition:
+//     - int id;                // Unique identifier for the track
+//     - float length;         // Length of the track in meters
+//     - float actualStart;    // Actual start position of the track in meters
+//     - float actualEnd;      // Actual end position of the track in meters
+//     - float barcodeStart;   // Start position of the barcode in meters        
+//     - float barcodeEnd;     // End position of the barcode in meters
+
 const TrackData rightDataTable[] = {
-    { 1, 12.0, 0.0, 12.0, 999.0, 999.0},
-    { 2, 4.0, 12.0, 16.0, 999.0, 999.0}
+    { 1, 12.0, 0.0, 12.0, 118800.0, 0.0},
+    { 2, 4.0, 12.0, 16.0, 12585600.0, 12551600.0}
 };
 
 #else
