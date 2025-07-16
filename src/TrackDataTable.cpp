@@ -7,8 +7,8 @@ const TrackData leftDataTable[] = {};
 
 // TODO: add right values
 const TrackData rightDataTable[] = {
-    { 1, 12.0, 0.0, 12.0, 999.0, 999.0},
-    { 2, 4.0, 12.0, 16.0, 999.0, 999.0}
+    { 0, 12.0, 0.0, 12.0, 11.8800, 0.0},
+    { 1, 4.0, 12.0, 16.0, 1258.56, 1255.16}
 };
 
 #else

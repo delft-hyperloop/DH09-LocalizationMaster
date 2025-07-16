@@ -18,16 +18,6 @@
 #define CONFIG_ADDR 0
 #define SLAVE_ID_ADDR 50 // Where we store slave ID
 
-enum CommandType
-{
-  STOP,
-  CYCLIC_POS,
-  CYCLIC_POS_VEL,
-  SINGLE_POS,
-  SINGLE_POS_VEL,
-  STANDBY,
-  UNKNOWN,
-};
 
 struct HeartbeatHandler {
   unsigned long lastHeartbeatTime = 0;
@@ -59,11 +49,6 @@ struct HeartbeatHandler {
   }
 };
 
-void sendCommandToSensor(CommandType cmd);
-void sendData();
-void resetTeensy();
-void doHandshake();
-
 uint8_t SLAVE_ID;
 uint8_t configValue;
 byte dataToSend[3];
@@ -90,19 +75,30 @@ enum CommandType
   UNKNOWN,
 };
 
-TrackData trackDataLeft[leftDataTableSize]; // we will only use the right side this year, but i added left side for future (you are welcome DH10 <3)
+TrackData trackDataLeft[leftDataTableSize]; // we will only use the left side this year, but i added right side for future (you are welcome DH10 <3)
 TrackData trackDataRight[rightDataTableSize];
-
-void sendCommandToSensor(CommandType cmd);
-void sendData();
-void writeTrackDataToEEPROM();
-void readTrackDataFromEEPROM();
-void resetTeensy();
 
 uint8_t handshakeInitFrame[5] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 uint8_t handshakeOrderFrame[5] = {1,2,3,4,5};
 uint8_t handshakeEndFrame[5] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 HeartbeatHandler heartbeatHandler;
+
+// Hardt variables
+int track_id = 0;
+float absolute_position = 0; // Absolute position in meters
+float barcode_prev = 0; // Absolute position in meters
+bool valid_position = false;
+
+void sendCommandToSensor(CommandType cmd);
+void sendData();
+void resetTeensy();
+void doHandshake();
+void find_position(float barcode, int &track_id, float barcode_prev, float velocity, 
+                   const std::vector<TrackData> &tracks, float &barcode_pos);
+void barcode_estimator(float barcode, int track_id_prev, float barcode_prev, float velocity, const std::vector<TrackData> &tracks,
+                       int &track_id, float &absolute_position, bool &valid_position);
+float calculate_position(float barcode, TrackData track);
+bool check_range(float barcode, const TrackData &track);
 
 void setup() {
   // ---------------------- USB ---------------------
@@ -144,8 +140,8 @@ void setup() {
   // ------------------------------------------------
 
   // -------------------- EEPROM TRACK DATA --------------------
-  writeTrackDataToEEPROM(); // Write track data to EEPROM
-  readTrackDataFromEEPROM(); // Read track data from EEPROM
+  // writeTrackDataToEEPROM(); // Write track data to EEPROM
+  // readTrackDataFromEEPROM(); // Read track data from EEPROM
   Serial.println("Track data initialized.");
   // ------------------------------------------------
 
@@ -161,6 +157,8 @@ void setup() {
 
   Serial.println("Setup complete.");
 
+  barcode_estimator(positionValue/1e4, -1, positionValue/1e4, velocityValue, std::vector<TrackData>(rightDataTable, rightDataTable + rightDataTableSize), track_id, absolute_position, valid_position);
+  barcode_prev = positionValue/1e4; // Set the previous barcode to the current position
 }
 
 void loop() {
@@ -179,15 +177,24 @@ void loop() {
       positionValue = (positionValue << 8) | received[i];
       positionArray[i-2] = received[i];
     }
+
+    // ----------------- DE-SCRAMBLE DATA ----------------
+    find_position(positionValue/1e4, track_id, barcode_prev, velocityValue/1e4, std::vector<TrackData>(rightDataTable, rightDataTable + rightDataTableSize), absolute_position);
+    // ---------------------------------------------------
+    
+    for (size_t i = 4; i > 0; i--)
+    {
+      frame[i] = (uint32_t)(absolute_position * 1e4) >> (i * 8); // Convert absolute position to bytes
+    }
     
     // Modify back sensor to have the same values as the front
-    if (SLAVE_ID == 0xB2) {
-      positionValue -= 207395; // Make it so that the position matches the other sensor
-      positionArray[0] = (positionValue >> 24) & 0xFF;  
-      positionArray[1] = (positionValue >> 16) & 0xFF;  
-      positionArray[2] = (positionValue >> 8)  & 0xFF;  
-      positionArray[3] = (positionValue)       & 0xFF;
-  }
+  //   if (SLAVE_ID == 0xB2) {
+  //     positionValue -= 207395; // Make it so that the position matches the other sensor
+  //     positionArray[0] = (positionValue >> 24) & 0xFF;  
+  //     positionArray[1] = (positionValue >> 16) & 0xFF;  
+  //     positionArray[2] = (positionValue >> 8)  & 0xFF;  
+  //     positionArray[3] = (positionValue)       & 0xFF;
+  // }
 
     velocityArray[0] = received[6];
     velocityArray[1] = received[7];
@@ -198,39 +205,32 @@ void loop() {
       velocityValue = (velocityValue << 8) | received[i];
     }
     if (positionValue < 1188000){
-      Serial.print("\r||   Position: ");
-      Serial.print(positionValue);
-      Serial.print(". Velocity: ");
-      Serial.print(velocityValue);
-      Serial.print("   ||   ");
+      Serial.print("\r|| Received position: ");
+      Serial.print(positionValue/1e4);
+      Serial.print(" m. Received velocity: ");
+      Serial.print(velocityValue/1e4);
+      Serial.print(" m/s   ||   ");
       // Serial4.write(positionArray, 4); // Send data over RS-422
-      for (size_t i = 0; i < 4; i++)
-      {
-        frame[i+1] = positionArray[i];
-      }
+      // for (size_t i = 0; i < 4; i++)
+      // {
+      //   frame[i+1] = positionArray[i];
+      // }
       frame[5] = (abs(velocityValue) >> 8);
       frame[6] = (abs(velocityValue) & 0xFF);
+      
+      Serial.print("Calculated position: ");
+      Serial.print(absolute_position);
+      Serial.print(" m   ||   ");
     }
-    if (heartbeatHandler.connected) { Serial.print(heartbeatHandler.heartbeatChar + "   ||  "); }
+    // if (heartbeatHandler.connected) { Serial.print(heartbeatHandler.heartbeatChar + "   ||  "); }
   }
-  if (Serial5.available() > 0) {
-      uint8_t id = Serial5.read(); // Read the ID byte
-  }
+  // if (Serial5.available() > 0) {
+  //     uint8_t id = Serial5.read(); // Read the ID byte
+  // }
 
   // ---------------------------------------------------
 
 
-
-  // ----------------- DE-SCRAMBLE DATA ----------------
-  for (int i = 0; i < rightDataTableSize; i++) {
-    // Check if the read value lies within the current track data range
-    if (positionValue >= trackDataRight[i].barcodeStart && positionValue <= trackDataRight[i].barcodeEnd) {
-      // If it does, convert it based on the actual position (linear interpolation)
-      float actualPosition = trackDataRight[i].actualStart + (positionValue - trackDataRight[i].barcodeStart) * (trackDataRight[i].actualEnd - trackDataRight[i].actualStart) / (trackDataRight[i].barcodeEnd - trackDataRight[i].barcodeStart);
-    }
-  }
-
-  // ---------------------------------------------------
 
   // ----------------- SENSOR HUB COMMUNICATION ----------------
   // if (Serial5.available() > 0) {
@@ -262,6 +262,99 @@ void loop() {
   //       break;
   //   }
   // }
+}
+
+void find_position(float barcode, int &track_id, float barcode_prev, float velocity, 
+                   const std::vector<TrackData> &tracks, float &barcode_pos) {
+  int track_id_prev, track_id_next, track_id_current = track_id;
+
+  if (track_id == 0) {
+    track_id_prev = 0;
+    track_id_next = 1;
+  } else if (track_id == tracks.size() - 1) {
+    track_id_prev = track_id - 1;
+    track_id_next = track_id;
+  } else {
+    track_id_prev = track_id - 1;
+    track_id_next = track_id + 1;
+  }
+
+  const TrackData &track_prev = tracks[track_id_prev];
+  const TrackData &track_next = tracks[track_id_next];
+  const TrackData &track_current = tracks[track_id_current];
+
+  float distance_prev = (track_prev.id != track_current.id) ? 
+    fabs(barcode_prev - track_prev.actualEnd) : 5000;
+  float distance_next = (track_next.id != track_current.id) ? +
+    fabs(barcode_prev - track_next.actualStart) : 5000;
+
+  const TrackData *track_other = (distance_prev <= distance_next) ? &track_prev : &track_next;
+
+  if (check_range(barcode, *track_other)) {
+    track_id = track_other->id;
+    barcode_pos = calculate_position(barcode, *track_other);
+  } else if (check_range(barcode, track_current)) {
+    track_id = track_current.id;
+    barcode_pos = calculate_position(barcode, track_current);
+  } else {
+    track_id = track_current.id;
+    barcode_pos = barcode_prev + velocity * 200;  // Using .absolute_start as frequency proxy
+  }
+}
+
+bool check_range(float barcode, const TrackData &track) {
+  if (track.barcodeStart < track.barcodeEnd) {
+    return barcode >= track.barcodeStart + 0.05 && barcode <= track.barcodeEnd - 0.05;
+  } else {
+    return barcode <= track.barcodeStart - 0.05 && barcode >= track.barcodeEnd + 0.05;
+  }
+}
+
+float calculate_position(float barcode, TrackData track){
+  if (track.barcodeStart <= track.barcodeEnd) { // Starboard
+    // Linear interpolation to calculate the position based on the barcode
+    return track.actualStart + (barcode - track.barcodeStart);
+  } else {
+    return track.actualStart + (track.actualStart - barcode); // Return 0 or some error value
+  }
+}
+
+bool check_valid(float barcode, const TrackData &track) {
+  if (track.barcodeStart < track.barcodeEnd) {
+    return barcode >= track.barcodeStart + 0.2 && barcode <= track.barcodeEnd - 8.2;
+  } else {
+    return barcode <= track.barcodeStart - 9.2 && barcode >= track.barcodeEnd + 0.2;
+  }
+}
+
+void barcode_estimator(float barcode, int track_id_prev, float barcode_prev, float velocity, const std::vector<TrackData> &tracks,
+                       int &track_id, float &absolute_position, bool &valid_position) {
+  track_id = track_id_prev;
+  absolute_position = 0;
+  valid_position = false;
+
+  if (track_id_prev == -1) {
+    int index = 0;
+    while (index < tracks.size()) {
+      const TrackData &track = tracks[index];
+      if (check_range(barcode, track)) {
+        track_id = track.id;
+        absolute_position = calculate_position(barcode, track);
+        find_position(barcode, track_id, barcode_prev, velocity, tracks, absolute_position);
+        break;
+      }
+      index++;
+    }
+
+    if (index >= tracks.size()) {
+      track_id = -1;
+      absolute_position = -1;
+    }
+  }
+
+  if (track_id != -1) {
+    valid_position = check_valid(barcode, tracks[track_id]);
+  }
 }
 
 void sendData() {
