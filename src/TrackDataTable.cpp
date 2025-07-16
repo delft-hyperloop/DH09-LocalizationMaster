@@ -1,19 +1,20 @@
 #include "TrackDataTable.h"
-#define CUSTOM_TRACK // <-- Comment this line to use the EHC track data
 
 #ifdef CUSTOM_TRACK
 
 const TrackData leftDataTable[] = {};
 
-// TODO: add right values
 const TrackData rightDataTable[] = {
     { 0, 12.0, 0.0, 12.0, 11.8800, 0.0},
     { 1, 4.0, 12.0, 16.0, 1258.56, 1255.16}
 };
 
 #else
+constexpr const size_t leftDataTableSize = 28;
+constexpr const size_t rightDataTable = 28;
+
 // Left side 
-const TrackData leftDataTable[] = {
+const TrackData leftDataTable[leftDataTable] = {
     { 1,  4.0,   0.0,    4.0,   640.0, 644.0 },
     { 2,  4.0,   4.0,    8.0,   628.0, 632.0 },
     { 3,  4.0,   8.0,   12.0,   636.0, 640.0 },
@@ -46,7 +47,7 @@ const TrackData leftDataTable[] = {
 
 
 // Right side
-const TrackData rightDataTable[] = {
+const TrackData rightDataTable[rightDataTable] = {
     {1, 4.0, 0.0, 4.0, 608.0, 604.0},
     {2, 4.0, 4.0, 8.0, 748.0, 744.0},
     {3, 4.0, 8.0, 12.0, 744.0, 740.0},
