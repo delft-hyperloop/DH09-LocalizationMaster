@@ -1,6 +1,6 @@
 #ifndef TRACK_DATA_TABLE_H
 #define TRACK_DATA_TABLE_H
-#define CUSTOM_TRACK // <-- Comment this line to use the EHC track data
+// #define CUSTOM_TRACK // <-- Comment this line to use the EHC track data
 
 #include <Arduino.h>
 #include "TrackDataStruct.h"

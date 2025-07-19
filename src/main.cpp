@@ -80,6 +80,8 @@ uint8_t handshakeOrderFrame[5] = {1,2,3,4,5};
 uint8_t handshakeEndFrame[5] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 HeartbeatHandler heartbeatHandler;
 
+long lastprint = 0;
+
 // Hardt variables
 int trackId = 0;
 float absPosition = 0; // Absolute position in meters
@@ -155,7 +157,7 @@ void setup() {
     sensorReading = (sensorReading << 8) | received[i];
   }
 
-  barcode_estimator(sensorReading/1e5, -1, sensorReading/1e5, velocityValue, std::vector<TrackData>(rightDataTable, rightDataTable + rightDataTableSize), trackId, absPosition, validPosition);
+  barcode_estimator(sensorReading/1e5, -1, sensorReading/1e5, velocityValue, std::vector<TrackData>(leftDataTable, leftDataTable + leftDataTableSize), trackId, absPosition, validPosition);
   prevAbsPosition = sensorReading/1e5; // Set the previous barcode to the current position
 
   // -----------------------------------------------
@@ -186,22 +188,30 @@ void loop() {
     }
 
     // ----------------- DE-SCRAMBLE DATA ----------------
-    findAbsPosition(sensorReading/1e5, trackId, prevAbsPosition, velocityValue/1e3, std::vector<TrackData>(rightDataTable, rightDataTable + rightDataTableSize), absPosition);
+    findAbsPosition(sensorReading/1e5, trackId, prevAbsPosition, velocityValue/1e3, std::vector<TrackData>(leftDataTable, leftDataTable + leftDataTableSize), absPosition);
     
+    // Move back sensor to same position as front
+    if (SLAVE_ID == 0xB2) {
+      absPosition += 2.07449;
+    }
+
     // Update previous value if new one is correct
     if (validPosition) {
       prevAbsPosition = absPosition;
     }
+
     // ---------------------------------------------------
       
     // Populate CAN frame
     for (size_t i = 0; i < 4; i++) {
-        CANframe[i] = ((uint32_t)(absPosition*1e5) >> (8 * (3 - i))) & 0xFF;  // Big-endian (MSB first)
+        CANframe[i+1] = ((uint32_t)(absPosition*1e5) >> (8 * (3 - i))) & 0xFF;  // Big-endian (MSB first)
     }
     CANframe[5] = (abs(velocityValue) >> 8);
     CANframe[6] = (abs(velocityValue) & 0xFF);
 
 
+    if (millis() - lastprint > 200) {
+      lastprint = millis();
     // Print if value within bounds (120m is max in EHC)
     if (absPosition < 120){
       Serial.print("\r|| Received position: ");
@@ -212,12 +222,13 @@ void loop() {
       
       Serial.print("Absolute position: ");
       Serial.print(absPosition, 5);
-      Serial.print(" m   ||   ");
+      Serial.println(" m   ||   ");
     } else {
       Serial.println("Out of bounds value (>120 m): " + String(absPosition));
     }
     // if (heartbeatHandler.connected) { Serial.print(heartbeatHandler.heartbeatChar + "   ||  "); }
   }
+}
   // if (Serial5.available() > 0) {
   //     uint8_t id = Serial5.read(); // Read the ID byte
   // }
@@ -262,6 +273,8 @@ void findAbsPosition(float barcode, int &trackId, float prevAbsPosition, float v
                    const std::vector<TrackData> &tracks, float &absPosition) {
   int trackIdPrev, trackIdNext, trackIdCurrent = trackId;
 
+  // Serial.println("barcode: " + String(barcode) + " prevabspos: " + String(prevAbsPosition) + " vel: " + String(velocity) + " abspos: " + String(absPosition) );
+  // Serial.println(velocity, 5);
   if (trackId == 0) {
     trackIdPrev = 0;
     trackIdNext = 1;
@@ -283,7 +296,7 @@ void findAbsPosition(float barcode, int &trackId, float prevAbsPosition, float v
     fabs(prevAbsPosition - trackNext.actualStart) : 5000;
 
   const TrackData *trackOther = (distance_prev <= distance_next) ? &trackPrev : &trackNext;
-  
+
   validPosition = true; // used to update prevAbsPosition
   if (check_range(barcode, *trackOther)) {
     trackId = trackOther->id;
@@ -292,8 +305,10 @@ void findAbsPosition(float barcode, int &trackId, float prevAbsPosition, float v
     trackId = trackCurrent.id;
     absPosition = calculate_position(barcode, trackCurrent);
   } else {
+    Serial.println("interpolating");
+    Serial.print("vel: " + String(velocity, 5) + " prevpos: " + String(prevAbsPosition, 5));
     trackId = trackCurrent.id;
-    absPosition = prevAbsPosition + velocity * 200;
+    absPosition = prevAbsPosition + velocity / 200;
     validPosition = false;
   }
 }
@@ -360,14 +375,14 @@ void sendData() {
   CANframe[0] = SLAVE_ID; // id
   CANframe[7] = (CANframe[0] + CANframe[1] + CANframe[2] + CANframe[3] + CANframe[4] + CANframe[5] + CANframe[6]) % 256; // checksum
 
-  Serial.print("Sent data to Sensor Hub: ");
+  // Serial.print("Sent data to Sensor Hub: ");
 
-  for (size_t i = 0; i < 8; i++)
-  {
-    Serial.print("0x");
-    Serial.print(CANframe[i], HEX);
-    Serial.print(" ");
-  }
+  // for (size_t i = 0; i < 8; i++)
+  // {
+  //   Serial.print("0x");
+  //   Serial.print(CANframe[i], HEX);
+  //   Serial.print(" ");
+  // }
 
   Serial4.write(CANframe, 8);
   Serial4.flush();
